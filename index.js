@@ -39,7 +39,7 @@ Router.prototype.dispatch = function(request, response) {
   var httpContext = this.httpContext = new HttpContext(request, response);
 
   // parse body on post
-  if (httpContext.request.method == 'POST') {
+  if (/(POST|PUT)/i.test(httpContext.request.method) && /(urlencoded|json)/i.test(httpContext.request.headers['content-type'])) {
     var form = new formidable.IncomingForm();
 
     form.on('field', function(field, value) {
@@ -58,6 +58,19 @@ Router.prototype.dispatch = function(request, response) {
 
     form.parse(httpContext.request);
   }
+  else {
+    httpContext.body = [];
+
+    httpContext.request.on('data', function(chunk) {
+      httpContext.body.push(chunk);
+    });
+
+    httpContext.request.on('end', function() {
+      httpContext.body = Buffer.concat(httpContext.body);
+      that.emit('body', httpContext.body);
+    });
+  }
+
 
   this.plRouter.on('end', function(err, results) {
     var matched = results[0].matched,
@@ -177,7 +190,7 @@ Router.prototype.use = function(method, urlformat, options, handle) {
         }
       }
 
-      if (httpContext.request.method == 'POST' && !that.parsed) {
+      if (/(POST|PUT)/i.test(httpContext.request.method) && !that.parsed) {
         that.on('body', function() {
           options.handle(httpContext);
         });
